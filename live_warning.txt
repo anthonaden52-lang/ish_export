@@ -1,0 +1,31 @@
+LIVE EXECUTION IS HARD-DISABLED IN THIS BUILD. Passing --execute exits before API quotes,
+wallet-key access, transaction signing, or transaction submission. Paper trading stays enabled
+by default and does not broadcast or spend SOL.
+
+IMPORTANT TRANSACTION-SAFETY GAP
+swap_bot.py checks quote metadata and configured limits, then signs Jupiter's serialized
+transaction. It does NOT currently decode and inspect the transaction's instructions, enforce
+an instruction/program allowlist, or simulate the exact transaction before signing. The existing
+offline selftest tests only the signing-slot behavior and quote/risk checks; it does not establish
+transaction safety. These safeguards must not be described as implemented.
+
+Before anyone changes the hard-disabled gate, implement and independently review all of the following:
+- Deserialize the exact versioned transaction and resolve address lookup tables before review.
+- Verify the fee payer, required signers, wallet authority, source and destination mints/accounts,
+  exact input amount, minimum output, and all writable accounts.
+- Decode every instruction and CPI-relevant program; reject unknown programs and any unexpected
+  SOL/token transfer, approval/delegation, account close, authority change, tip, or destination.
+- Simulate the exact unsigned message using a trusted RPC before signing. Reject simulation errors,
+  unexpected logs/return data, balance or token-account deltas, and fees outside explicit limits.
+- Confirm the blockhash and quote are still valid; sign only the exact message that was inspected
+  and simulated. If any bytes or quote data change, repeat validation and simulation.
+- After submission, verify the signature's finalized result and reconcile actual SOL/token balances
+  before recording a completed trade or allowing another trade.
+
+Other safeguards also need review before live use: verify Jupiter's current API contract, token
+mints and destination accounts, liquidity and daily-loss controls, and partial-result handling.
+This project does not need or request a private key or seed phrase for its current paper and research
+workflows.
+
+The model is not proof of profitability. Passing quote/risk checks is not proof that a transaction
+is safe, profitable, or will execute as expected.

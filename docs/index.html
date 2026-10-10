@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#101624">
+  <meta name="description" content="Acorn 1.0 public, read-only paper-trading research dashboard.">
+  <title>Acorn 1.0 — Paper Dashboard</title>
+  <style>
+    :root{color-scheme:dark;--bg:#0b1018;--panel:#121b27;--line:#253244;--text:#e8eef5;--muted:#9aabba;--green:#61d49a;--amber:#f2c16b;--red:#ff827e;--blue:#84baff}
+    *{box-sizing:border-box}
+    body{margin:0;background:radial-gradient(ellipse at 50% -20%,#1c3041 0,var(--bg) 58%);color:var(--text);font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
+    .wrap{width:min(1100px,calc(100% - 32px));margin:0 auto;padding:24px 0 48px}
+    header{display:flex;justify-content:space-between;align-items:center;gap:18px;margin-bottom:36px}
+    .brand{font-weight:750;font-size:20px;letter-spacing:.01em}.brand span{color:var(--green)}
+    .badge{border:1px solid #345044;border-radius:999px;color:#a7e9c4;padding:5px 11px;font-size:12px;letter-spacing:.08em;text-transform:uppercase;white-space:nowrap}
+    .hero{max-width:760px;margin-bottom:26px}.eyebrow{color:var(--green);font-size:12px;font-weight:700;letter-spacing:.14em;text-transform:uppercase}
+    h1{font-size:clamp(32px,6vw,54px);line-height:1.05;letter-spacing:-.04em;margin:10px 0 14px}
+    .intro{color:var(--muted);font-size:16px;max-width:690px;margin:0}
+    .notice{display:flex;gap:12px;align-items:flex-start;border:1px solid #374254;background:#111a25;border-radius:12px;padding:14px 16px;margin:26px 0}
+    .notice strong{display:block;margin-bottom:2px}.notice p{margin:0;color:var(--muted);font-size:13px}
+    .dot{width:10px;height:10px;border-radius:50%;background:var(--muted);margin-top:5px;flex:none}.dot.fresh{background:var(--green);box-shadow:0 0 12px #61d49a88}.dot.stale{background:var(--amber)}.dot.unavailable{background:var(--muted)}
+    .stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:18px 0 24px}
+    .card{min-width:0;border:1px solid var(--line);background:linear-gradient(145deg,#141e2b,#101722);border-radius:12px;padding:16px}
+    .label{display:block;color:var(--muted);font-size:12px;margin-bottom:8px}.value{font-size:18px;font-weight:650;overflow-wrap:anywhere}
+    .section-head{display:flex;align-items:end;justify-content:space-between;gap:12px;margin:32px 0 12px}.section-head h2{font-size:19px;margin:0}.section-head p{color:var(--muted);font-size:12px;margin:0}
+    .table-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:12px;background:#101722}
+    table{width:100%;border-collapse:collapse;min-width:720px}th,td{text-align:right;padding:12px 14px;border-bottom:1px solid #202c3b;white-space:nowrap}th{font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.06em}tbody tr:last-child td{border-bottom:0}th:first-child,td:first-child{text-align:left}
+    .pair{font-weight:650}.address{display:block;color:var(--muted);font:11px ui-monospace,SFMono-Regular,Consolas,monospace;margin-top:3px}.link{color:var(--blue);text-decoration:none}.link:hover{text-decoration:underline}.positive{color:var(--green)}.negative{color:var(--red)}.empty{padding:24px;text-align:center;color:var(--muted)}
+    footer{border-top:1px solid var(--line);margin-top:34px;padding-top:18px;color:var(--muted);font-size:12px}footer p{margin:5px 0}
+    @media(max-width:650px){.wrap{width:min(100% - 22px,1100px);padding-top:17px}header{margin-bottom:30px}.stats{grid-template-columns:1fr}.card{padding:13px}.section-head{align-items:start;flex-direction:column}}
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <header>
+      <div class="brand"><span>●</span> Acorn 1.0</div>
+      <div class="badge">Public · Read only</div>
+    </header>
+
+    <section class="hero" aria-labelledby="title">
+      <div class="eyebrow">Solana market research</div>
+      <h1 id="title">Paper trading, in view.</h1>
+      <p class="intro">A read-only public snapshot from Acorn 1.0, a paper-first Solana market research bot. This site does not place trades or show account balances.</p>
+    </section>
+
+    <section class="notice" aria-live="polite">
+      <span id="dot" class="dot unavailable" aria-hidden="true"></span>
+      <div><strong id="status-title">Loading snapshot…</strong><p id="status-copy">Reading the latest published market snapshot.</p></div>
+    </section>
+
+    <section class="stats" aria-label="Snapshot summary">
+      <div class="card"><span class="label">Last market scan</span><div id="last-scan" class="value">—</div></div>
+      <div class="card"><span class="label">Known pairs in saved data</span><div id="pair-count" class="value">—</div></div>
+      <div class="card"><span class="label">Snapshot exported</span><div id="exported" class="value">—</div></div>
+    </section>
+
+    <section aria-labelledby="markets-title">
+      <div class="section-head"><h2 id="markets-title">Recent market pairs</h2><p>Up to 25 pairs, sorted by recorded liquidity</p></div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Token</th><th>Price</th><th>Liquidity</th><th>24h volume</th><th>5m change</th><th>1h change</th><th>Source</th></tr></thead>
+          <tbody id="pairs"><tr><td colspan="7" class="empty">Loading…</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+
+    <footer>
+      <p>Market values come from locally collected DexScreener snapshots and appear only while the saved data is fresh. A stale snapshot hides its old prices.</p>
+      <p>Paper trading only. No transaction execution, wallet keys, private balances, or model predictions are published here. Market data can be incomplete or change quickly; this is not financial advice.</p>
+    </footer>
+  </main>
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const numberFormat = new Intl.NumberFormat(undefined,{maximumSignificantDigits:5});
+    const moneyFormat = new Intl.NumberFormat(undefined,{style:"currency",currency:"USD",notation:"compact",maximumFractionDigits:2});
+    function dateText(value){if(!value)return "—";const d=new Date(value);return Number.isNaN(d.getTime())?"—":d.toLocaleString();}
+    function money(value){return Number.isFinite(value)?moneyFormat.format(value):"—";}
+    function price(value){return Number.isFinite(value)?"$"+numberFormat.format(value):"—";}
+    function change(value){if(!Number.isFinite(value))return "—";return (value>0?"+":"")+numberFormat.format(value)+"%";}
+    function safeDexLink(value){try{const u=new URL(value);return u.protocol==="https:"&&(u.hostname==="dexscreener.com"||u.hostname.endsWith(".dexscreener.com"))?u.href:null;}catch{return null;}}
+    function showEmpty(message){const row=document.createElement("tr");const cell=document.createElement("td");cell.colSpan=7;cell.className="empty";cell.textContent=message;row.append(cell);$("pairs").replaceChildren(row);}
+    function addCell(row,text,className){const cell=document.createElement("td");cell.textContent=text;if(className)cell.className=className;row.append(cell);return cell;}
+    function renderRows(state){
+      const rows=Array.isArray(state.pairs)?state.pairs:[];
+      if(state.market_status!=="fresh"||rows.length===0){showEmpty(state.market_status==="stale"?"The saved market snapshot is stale. Price rows are hidden until fresh data is exported.":"No fresh market pairs have been exported yet.");return;}
+      const body=document.createDocumentFragment();
+      for(const item of rows){
+        const tr=document.createElement("tr");const first=document.createElement("td");
+        const name=document.createElement("span");name.className="pair";name.textContent=item.symbol||"Unknown token";first.append(name);
+        const addr=document.createElement("span");addr.className="address";const token=String(item.token||"");addr.textContent=token.length>12?token.slice(0,5)+"…"+token.slice(-5):token;first.append(addr);tr.append(first);
+        addCell(tr,price(item.price_usd));addCell(tr,money(item.liquidity_usd));addCell(tr,money(item.volume_24h_usd));
+        const c5=addCell(tr,change(item.change_5m_pct));if(Number.isFinite(item.change_5m_pct))c5.classList.add(item.change_5m_pct>=0?"positive":"negative");
+        const c1=addCell(tr,change(item.change_1h_pct));if(Number.isFinite(item.change_1h_pct))c1.classList.add(item.change_1h_pct>=0?"positive":"negative");
+        const source=addCell(tr,"");const link=safeDexLink(item.url);if(link){const a=document.createElement("a");a.className="link";a.href=link;a.target="_blank";a.rel="noopener noreferrer";a.textContent="DexScreener";source.append(a);}else source.textContent="DexScreener";
+        body.append(tr);
+      }
+      $("pairs").replaceChildren(body);
+    }
+    async function load(){
+      try{
+        const response=await fetch("./status.json",{cache:"no-store"});if(!response.ok)throw new Error("snapshot unavailable");
+        const state=await response.json();const status=["fresh","stale","unavailable"].includes(state.market_status)?state.market_status:"unavailable";
+        $("dot").className="dot "+status;$("last-scan").textContent=dateText(state.last_market_update);
+        $("pair-count").textContent=Number.isFinite(state.known_pairs)?String(state.known_pairs):"—";$("exported").textContent=dateText(state.generated_at);
+        if(status==="fresh"){$("status-title").textContent="Fresh saved snapshot";$('status-copy').textContent="Latest scan is within the freshness window. Values are a snapshot, not a streaming feed.";}
+        else if(status==="stale"){$("status-title").textContent="Saved snapshot is stale";$('status-copy').textContent="Old price rows are hidden. Run the local exporter after a new collector scan to publish an update.";}
+        else{$("status-title").textContent="No usable snapshot published";$('status-copy').textContent="Run the local exporter after collecting DexScreener data to create a public snapshot.";}
+        renderRows({...state,market_status:status});
+      }catch{$("dot").className="dot unavailable";$("status-title").textContent="Snapshot not available";$('status-copy').textContent="The site is ready, but status.json has not been published yet.";$("last-scan").textContent="—";$("pair-count").textContent="—";$("exported").textContent="—";showEmpty("No public snapshot is available.");}
+    }
+    load();
+  </script>
+</body>
+</html>

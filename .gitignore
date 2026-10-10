@@ -1,0 +1,8 @@
+.env
+*.key
+*.pem
+data/
+models/
+backups/
+.venv/
+__pycache__/

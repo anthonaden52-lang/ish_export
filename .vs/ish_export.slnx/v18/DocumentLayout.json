@@ -1,0 +1,126 @@
+{
+  "Version": 1,
+  "WorkspaceRootPath": "C:\\Users\\Aden\\OneDrive\\Desktop\\ish_export\\",
+  "Documents": [
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\Aden\\OneDrive\\Desktop\\ish_export\\ish_export\\._indicators.py||{40D31677-CBC0-4297-A9EF-89D907823A98}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:ish_export\\._indicators.py||{40D31677-CBC0-4297-A9EF-89D907823A98}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\Aden\\OneDrive\\Desktop\\ish_export\\ish_export\\._hotkeys.py||{40D31677-CBC0-4297-A9EF-89D907823A98}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:ish_export\\._hotkeys.py||{40D31677-CBC0-4297-A9EF-89D907823A98}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\Aden\\OneDrive\\Desktop\\ish_export\\ish_export\\._evaluate.py||{40D31677-CBC0-4297-A9EF-89D907823A98}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:ish_export\\._evaluate.py||{40D31677-CBC0-4297-A9EF-89D907823A98}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\Aden\\OneDrive\\Desktop\\ish_export\\ish_export\\._dashboard.py||{40D31677-CBC0-4297-A9EF-89D907823A98}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:ish_export\\._dashboard.py||{40D31677-CBC0-4297-A9EF-89D907823A98}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\Aden\\OneDrive\\Desktop\\ish_export\\ish_export\\._collector.py||{40D31677-CBC0-4297-A9EF-89D907823A98}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:ish_export\\._collector.py||{40D31677-CBC0-4297-A9EF-89D907823A98}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\Aden\\OneDrive\\Desktop\\ish_export\\ish_export\\._backtest.py||{40D31677-CBC0-4297-A9EF-89D907823A98}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:ish_export\\._backtest.py||{40D31677-CBC0-4297-A9EF-89D907823A98}"
+    }
+  ],
+  "DocumentGroupContainers": [
+    {
+      "Orientation": 0,
+      "VerticalTabListWidth": 256,
+      "DocumentGroups": [
+        {
+          "DockedWidth": 200,
+          "SelectedChildIndex": 1,
+          "Children": [
+            {
+              "$type": "Bookmark",
+              "Name": "ST:0:0:{aa2115a1-9712-457b-9047-dbb71ca2cde3}"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 0,
+              "Title": "._indicators.py",
+              "DocumentMoniker": "C:\\Users\\Aden\\OneDrive\\Desktop\\ish_export\\ish_export\\._indicators.py",
+              "RelativeDocumentMoniker": "ish_export\\._indicators.py",
+              "ToolTip": "C:\\Users\\Aden\\OneDrive\\Desktop\\ish_export\\ish_export\\._indicators.py*",
+              "RelativeToolTip": "ish_export\\._indicators.py*",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001001|",
+              "WhenOpened": "2026-10-10T00:09:12.209Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 1,
+              "Title": "._hotkeys.py",
+              "DocumentMoniker": "C:\\Users\\Aden\\OneDrive\\Desktop\\ish_export\\ish_export\\._hotkeys.py",
+              "RelativeDocumentMoniker": "ish_export\\._hotkeys.py",
+              "ToolTip": "C:\\Users\\Aden\\OneDrive\\Desktop\\ish_export\\ish_export\\._hotkeys.py*",
+              "RelativeToolTip": "ish_export\\._hotkeys.py*",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001001|",
+              "WhenOpened": "2026-10-10T00:09:11.993Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 2,
+              "Title": "._evaluate.py",
+              "DocumentMoniker": "C:\\Users\\Aden\\OneDrive\\Desktop\\ish_export\\ish_export\\._evaluate.py",
+              "RelativeDocumentMoniker": "ish_export\\._evaluate.py",
+              "ToolTip": "C:\\Users\\Aden\\OneDrive\\Desktop\\ish_export\\ish_export\\._evaluate.py*",
+              "RelativeToolTip": "ish_export\\._evaluate.py*",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001001|",
+              "WhenOpened": "2026-10-10T00:09:11.79Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 3,
+              "Title": "._dashboard.py",
+              "DocumentMoniker": "C:\\Users\\Aden\\OneDrive\\Desktop\\ish_export\\ish_export\\._dashboard.py",
+              "RelativeDocumentMoniker": "ish_export\\._dashboard.py",
+              "ToolTip": "C:\\Users\\Aden\\OneDrive\\Desktop\\ish_export\\ish_export\\._dashboard.py*",
+              "RelativeToolTip": "ish_export\\._dashboard.py*",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001001|",
+              "WhenOpened": "2026-10-10T00:09:11.608Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 4,
+              "Title": "._collector.py",
+              "DocumentMoniker": "C:\\Users\\Aden\\OneDrive\\Desktop\\ish_export\\ish_export\\._collector.py",
+              "RelativeDocumentMoniker": "ish_export\\._collector.py",
+              "ToolTip": "C:\\Users\\Aden\\OneDrive\\Desktop\\ish_export\\ish_export\\._collector.py*",
+              "RelativeToolTip": "ish_export\\._collector.py*",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001001|",
+              "WhenOpened": "2026-10-10T00:09:11.454Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 5,
+              "Title": "._backtest.py",
+              "DocumentMoniker": "C:\\Users\\Aden\\OneDrive\\Desktop\\ish_export\\ish_export\\._backtest.py",
+              "RelativeDocumentMoniker": "ish_export\\._backtest.py",
+              "ToolTip": "C:\\Users\\Aden\\OneDrive\\Desktop\\ish_export\\ish_export\\._backtest.py*",
+              "RelativeToolTip": "ish_export\\._backtest.py*",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001001|",
+              "WhenOpened": "2026-10-10T00:08:59.038Z",
+              "EditorCaption": ""
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

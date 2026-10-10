@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "site": "Acorn 1.0",
+  "mode": "PAPER",
+  "generated_at": null,
+  "market_status": "unavailable",
+  "last_market_update": null,
+  "market_age_seconds": null,
+  "known_pairs": 0,
+  "source": "DexScreener market snapshots",
+  "pairs": []
+}
