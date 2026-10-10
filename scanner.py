@@ -32,6 +32,23 @@ session = requests.Session()
 session.headers.update({"User-Agent": "MemeAIResearchBot/1.0"})
 RATE_FILE = ROOT / "data" / "dexscreener_rate.json"
 RATE_LOCK = ROOT / "data" / "dexscreener_rate.lock"
+RATE_REPLACE_ATTEMPTS = 8
+
+
+def _replace_rate_state(tmp, target):
+    """Retry transient Windows/OneDrive locks while holding the rate-state lock.
+
+    If the replacement still fails, propagate the error so no API request is
+    sent without first persisting its rate-limit reservation.
+    """
+    for attempt in range(RATE_REPLACE_ATTEMPTS):
+        try:
+            tmp.replace(target)
+            return
+        except PermissionError:
+            if attempt + 1 == RATE_REPLACE_ATTEMPTS:
+                raise
+            time.sleep(min(0.1 * (2 ** attempt), 2.0))
 
 
 def _rate_limit(url):
@@ -66,7 +83,7 @@ def _rate_limit(url):
                     f.write(json.dumps(payload, allow_nan=False))
                     f.flush()
                     os.fsync(f.fileno())
-                tmp.replace(RATE_FILE)
+                _replace_rate_state(tmp, RATE_FILE)
                 return
             oldest = min(stamps)
             wait = 60 - (now - oldest)

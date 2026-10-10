@@ -5,6 +5,7 @@ fit, calibration, and threshold selection. The saved model records its data and
 feature versions for reproducibility.
 """
 import hashlib
+import io
 import json
 import os
 from datetime import datetime, timezone
@@ -14,7 +15,7 @@ import pandas as pd
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import brier_score_loss, classification_report, roc_auc_score
 
-from data_quality import DataQualityError, load_market_csv, require_training_source
+from data_quality import DataQualityError, clean_market_frame, require_training_source
 from indicators import add_indicators, FEATURES, FEATURE_VERSION, READY
 from labels import HORIZON_MINUTES, MODEL_THRESHOLD, TARGET_RETURN, add_labels, calibration_split, time_split
 from model_store import predict_probability, save_model
@@ -24,6 +25,26 @@ from validation import feature_drift_report, make_classifier, walk_forward_metri
 ROOT = Path(__file__).resolve().parent
 DATA = ROOT / "data" / "market.csv"
 HISTORY = ROOT / "data" / "model_history.jsonl"
+
+
+def _class_counts(targets):
+    values = pd.Series(targets).astype(int)
+    return {"positive": int((values == 1).sum()), "negative": int((values == 0).sum())}
+
+
+def _load_training_snapshot(path):
+    """Parse and hash one immutable copy of the source bytes used for a fit."""
+    path = Path(path)
+    try:
+        raw = path.read_bytes()
+        if not raw.endswith(b"\n"):
+            raise DataQualityError(f"market CSV snapshot has an incomplete final row: {path}")
+        market, quality = clean_market_frame(pd.read_csv(io.BytesIO(raw)))
+    except DataQualityError:
+        raise
+    except (OSError, pd.errors.ParserError, UnicodeError) as exc:
+        raise DataQualityError(f"could not read market CSV snapshot {path}: {exc}") from exc
+    return market, quality, hashlib.sha256(raw).hexdigest()
 
 
 def _is_disposable_synthetic_pipeline():
@@ -52,7 +73,7 @@ def train():
     if not DATA.exists():
         raise SystemExit(f"No {DATA}. Run collector.py first.")
     try:
-        market, quality = load_market_csv(DATA)
+        market, quality, training_data_sha256 = _load_training_snapshot(DATA)
     except DataQualityError as exc:
         raise SystemExit(f"Market data rejected: {exc}") from exc
     if quality["future_rows"]:
@@ -121,7 +142,7 @@ def train():
         "training_end": train_rows["timestamp"].max().isoformat(),
         "train_rows": int(len(fit_rows)),
         "calibration_rows": int(len(calibration_rows)),
-        "training_data_sha256": hashlib.sha256(DATA.read_bytes()).hexdigest(),
+        "training_data_sha256": training_data_sha256,
         "feature_drift": feature_drift,
     }
 
@@ -165,7 +186,15 @@ def train():
     history = {
         "trained_at": bundle["trained_at"], "rows": int(len(df)), "fit_rows": len(fit_rows),
         "calibration_rows": len(calibration_rows), "test_rows": int(len(test)),
-        "tokens": int(df["token_address"].nunique()), "test_auc": auc, "test_brier": brier,
+        "class_counts": {
+            "fit": _class_counts(fit_rows["target"]),
+            "calibration": _class_counts(calibration_rows["target"]),
+            "test": _class_counts(y_test),
+        },
+        "tokens": int(df["token_address"].nunique()),
+        "first_labeled": df["timestamp"].min().isoformat(),
+        "last_labeled": df["timestamp"].max().isoformat(),
+        "test_auc": auc, "test_brier": brier,
         "baseline_brier": baseline_brier, "test_positive_rate": float(y_test.mean()),
         "features": FEATURES, "feature_version": FEATURE_VERSION,
         "horizon_minutes": HORIZON_MINUTES, "target_return": TARGET_RETURN,

@@ -677,6 +677,23 @@ def pipeline():
         check("model + hash + history written",
               all(p.exists() for p in (sandbox / "models/model.joblib", sandbox / "models/model.sha256",
                                        sandbox / "data/model_history.jsonl")))
+        split_counts_ok = False
+        history_file = sandbox / "data/model_history.jsonl"
+        if history_file.exists():
+            try:
+                record = json.loads(history_file.read_text(encoding="utf-8").splitlines()[-1])
+                counts = record.get("class_counts", {})
+                split_counts_ok = all(
+                    isinstance(counts.get(name), dict)
+                    and counts[name].get("positive", -1) >= 0
+                    and counts[name].get("negative", -1) >= 0
+                    and counts[name]["positive"] + counts[name]["negative"] == record[row_key]
+                    for name, row_key in (("fit", "fit_rows"), ("calibration", "calibration_rows"),
+                                          ("test", "test_rows"))
+                )
+            except (IndexError, KeyError, TypeError, ValueError, json.JSONDecodeError):
+                split_counts_ok = False
+        check("training history records class counts for every temporal split", split_counts_ok)
     after_snapshot = (sorted((p.name, p.stat().st_size, p.stat().st_mtime_ns) for p in model_dir.iterdir())
                       if model_dir.exists() else None)
     check("pipeline leaves project models untouched", after_snapshot == model_snapshot)

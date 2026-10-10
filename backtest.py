@@ -1,6 +1,8 @@
 """Chronological, cost-aware snapshot backtest. This module has no import-time work."""
+import json
 import math
 import os
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pandas as pd
@@ -20,6 +22,7 @@ START_BALANCE = float(os.getenv("BACKTEST_START_BALANCE", "1000"))
 POSITION_FRACTION_BT = float(os.getenv("BACKTEST_POSITION_FRACTION", str(POSITION_FRACTION)))
 MAX_POSITIONS_BT = int(os.getenv("BACKTEST_MAX_POSITIONS", str(MAX_POSITIONS)))
 SIDE_COST = FEE + SLIPPAGE
+BACKTEST_SUMMARY = ROOT / "data" / "backtest_summary.json"
 
 
 def _config():
@@ -73,10 +76,15 @@ def _exit_for_entry(entry, market, max_hold_minutes=MAX_HOLD_MINUTES):
     return None
 
 
-def simulate_portfolio(entries, market, *, horizon_minutes, initial_balance=START_BALANCE,
-                       position_fraction=POSITION_FRACTION_BT, max_positions=MAX_POSITIONS_BT,
-                       side_cost=SIDE_COST, max_hold_minutes=MAX_HOLD_MINUTES):
-    """Simulate cash, open slots, position risk caps, token exposure and daily stop."""
+def simulate_portfolio_detailed(entries, market, *, horizon_minutes, initial_balance=START_BALANCE,
+                                position_fraction=POSITION_FRACTION_BT, max_positions=MAX_POSITIONS_BT,
+                                side_cost=SIDE_COST, max_hold_minutes=MAX_HOLD_MINUTES):
+    """Simulate cash, open slots, position risk caps, token exposure and daily stop.
+
+    Returns the closed trades plus the risk evidence the release gate inspects:
+    the worst intraday equity drop, how often the daily halt latched, and the
+    peak number of concurrent positions.
+    """
     numeric = (horizon_minutes, max_hold_minutes, initial_balance, position_fraction, side_cost)
     if any(isinstance(value, bool) or not math.isfinite(float(value)) for value in numeric):
         raise ValueError("Backtest simulation settings must be finite numbers.")
@@ -102,6 +110,8 @@ def simulate_portfolio(entries, market, *, horizon_minutes, initial_balance=STAR
     daily_halted = False
     latest_prices = {}
     market_cursor = 0
+    risk = {"worst_day_loss": 0.0, "worst_day_loss_pct": 0.0, "daily_halt_events": 0,
+            "max_open_positions": 0, "entries_skipped": 0}
 
     def equity():
         value = cash
@@ -110,6 +120,18 @@ def simulate_portfolio(entries, market, *, horizon_minutes, initial_balance=STAR
             gross = mark / pos["entry_price"] - 1
             value += pos["stake"] * (1 + _net_return(gross, side_cost))
         return value
+
+    def mark_daily_risk():
+        """Record the worst intraday drop and latch the daily halt exactly once."""
+        nonlocal daily_halted
+        if daily_start <= 0:
+            return
+        drop = equity() - daily_start
+        risk["worst_day_loss"] = min(risk["worst_day_loss"], drop)
+        risk["worst_day_loss_pct"] = min(risk["worst_day_loss_pct"], drop / daily_start)
+        if drop <= -MAX_DAILY_LOSS * daily_start and not daily_halted:
+            daily_halted = True
+            risk["daily_halt_events"] += 1
 
     def close_due(at):
         nonlocal cash
@@ -135,8 +157,7 @@ def simulate_portfolio(entries, market, *, horizon_minutes, initial_balance=STAR
                 active_day = day
                 daily_start = equity()
                 daily_halted = False
-            if daily_start > 0 and equity() - daily_start <= -MAX_DAILY_LOSS * daily_start:
-                daily_halted = True
+            mark_daily_risk()
             market_cursor += 1
 
     for _, row in entries.iterrows():
@@ -147,14 +168,11 @@ def simulate_portfolio(entries, market, *, horizon_minutes, initial_balance=STAR
         if day != active_day:
             active_day, daily_start = day, equity()
             daily_halted = False
-        if daily_start > 0 and equity() - daily_start <= -MAX_DAILY_LOSS * daily_start:
-            daily_halted = True
+        current_equity = equity()
+        mark_daily_risk()
         if (len(open_positions) >= max_positions or any(p["token"] == token for p in open_positions)
                 or cash <= 0 or daily_halted):
-            continue
-        current_equity = equity()
-        if current_equity - daily_start <= -MAX_DAILY_LOSS * daily_start:
-            daily_halted = True
+            risk["entries_skipped"] += 1
             continue
         stop_loss_cost = 1 - ((1 - STOP_LOSS) * (1 - side_cost) / (1 + side_cost))
         if stop_loss_cost <= 0 or not math.isfinite(stop_loss_cost):
@@ -163,18 +181,29 @@ def simulate_portfolio(entries, market, *, horizon_minutes, initial_balance=STAR
                     current_equity * MAX_LOSS_PER_TRADE / stop_loss_cost,
                     current_equity * MAX_TOKEN_EXPOSURE)
         if stake < 1.0:
+            risk["entries_skipped"] += 1
             continue
         outcome = _exit_for_entry(row, market, max_hold_minutes)
         if outcome is None:
+            risk["entries_skipped"] += 1
             continue
         exit_time, gross_return, reason = outcome
         net = _net_return(gross_return, side_cost)
         open_positions.append({"entry_time": stamp, "exit_time": exit_time, "token": token,
-                               "stake": stake, "gross_return": gross_return, "net_return": net,
+                               "entry_price": float(row["price_usd"]), "stake": stake,
+                               "gross_return": gross_return, "net_return": net,
                                "exit_reason": reason})
+        risk["max_open_positions"] = max(risk["max_open_positions"], len(open_positions))
         cash -= stake
     close_due(pd.Timestamp.max.tz_localize("UTC"))
-    return trades
+    risk["final_balance"] = float(cash)
+    risk["open_positions_at_end"] = int(len(open_positions))
+    return {"trades": trades, "risk": risk}
+
+
+def simulate_portfolio(entries, market, **kwargs):
+    """Closed trades only; see simulate_portfolio_detailed for the risk evidence."""
+    return simulate_portfolio_detailed(entries, market, **kwargs)["trades"]
 
 
 def run_backtest(bundle=None, market_path=DATA):
@@ -196,10 +225,103 @@ def run_backtest(bundle=None, market_path=DATA):
         raise ValueError("No matured, usable rows in the saved out-of-time test period.")
     ready["prob"] = predict_probability(bundle, ready[bundle["features"]])
     selected = ready.loc[ready["prob"] >= float(bundle["threshold"])]
-    trades = simulate_portfolio(selected, market, horizon_minutes=horizon)
+    simulation = simulate_portfolio_detailed(selected, market, horizon_minutes=horizon)
     baseline = [_net_return(float(v)) for v in ready["future_return"]]
     return {"bundle": bundle, "market": market, "quality": quality, "test": ready, "selected": selected,
-            "trades": trades, "baseline_returns": baseline, "test_start": test_start}
+            "trades": simulation["trades"], "risk": simulation["risk"],
+            "baseline_returns": baseline, "test_start": test_start}
+
+
+def summarize(result):
+    """Build the machine-readable cost-aware evidence the release gate reads."""
+    test, trades = result["test"], result["trades"]
+    baseline = result["baseline_returns"]
+    frame = pd.DataFrame(trades)
+    baseline_mean = (sum(baseline) / len(baseline)) if baseline else None
+    summary = {
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "test_start": pd.Timestamp(result["test_start"]).isoformat(),
+        "test_end": pd.Timestamp(test["timestamp"].max()).isoformat(),
+        "matured_rows": int(len(test)),
+        "tokens": int(test["token_address"].nunique()),
+        "sources": dict(result["quality"]["sources"]),
+        "threshold": float(result["bundle"]["threshold"]),
+        "horizon_minutes": float(result["bundle"]["horizon_minutes"]),
+        "start_balance": float(START_BALANCE),
+        "fee_per_side": float(FEE),
+        "slippage_per_side": float(SLIPPAGE),
+        "side_cost": float(SIDE_COST),
+        "baseline_mean_net_return": None if baseline_mean is None else float(baseline_mean),
+        "closed_trades": int(len(frame)),
+        "risk": dict(result["risk"]),
+        "risk_limits": {
+            "max_daily_loss": float(MAX_DAILY_LOSS),
+            "max_positions": int(MAX_POSITIONS_BT),
+            "position_fraction": float(POSITION_FRACTION_BT),
+            "max_trade_usd": float(MAX_TRADE_USD),
+            "max_token_exposure": float(MAX_TOKEN_EXPOSURE),
+            "stop_loss": float(STOP_LOSS),
+            "take_profit": float(TAKE_PROFIT),
+            "max_hold_minutes": float(MAX_HOLD_MINUTES),
+        },
+        "win_rate": None, "mean_net_return": None, "median_net_return": None,
+        "worst_net_return": None, "expectancy_usd": None, "total_pnl": None,
+        "final_balance": float(START_BALANCE), "return_pct": 0.0, "max_drawdown": 0.0,
+        "tokens_traded": 0, "exit_reasons": {}, "cost_sensitivity": [],
+    }
+    if frame.empty:
+        return summary
+    frame = frame.sort_values(["exit_time", "token"], kind="mergesort")
+    equity = pd.Series([START_BALANCE] + frame["balance"].tolist(), dtype=float)
+    total_pnl = float(frame["pnl"].sum())
+    summary.update(
+        win_rate=float((frame["net_return"] > 0).mean()),
+        mean_net_return=float(frame["net_return"].mean()),
+        median_net_return=float(frame["net_return"].median()),
+        worst_net_return=float(frame["net_return"].min()),
+        expectancy_usd=total_pnl / len(frame),
+        total_pnl=total_pnl,
+        final_balance=float(equity.iloc[-1]),
+        return_pct=float(equity.iloc[-1] / START_BALANCE - 1),
+        max_drawdown=float((equity / equity.cummax() - 1).min()),
+        tokens_traded=int(frame["token"].nunique()),
+        exit_reasons={str(name): int(count)
+                      for name, count in frame["exit_reason"].value_counts().items()},
+    )
+    return summary
+
+
+def cost_sensitivity(result, multiples=(0.5, 1.0, 1.5)):
+    """Re-run the same signal and price path under lighter and heavier costs."""
+    rows = []
+    for multiple in multiples:
+        scenario = simulate_portfolio_detailed(
+            result["selected"], result["market"],
+            horizon_minutes=float(result["bundle"]["horizon_minutes"]),
+            side_cost=SIDE_COST * multiple)
+        final = float(scenario["risk"]["final_balance"])
+        rows.append({
+            "label": "base" if multiple == 1.0 else f"{multiple:.1f}x costs",
+            "cost_multiple": float(multiple),
+            "closed_trades": int(len(scenario["trades"])),
+            "final_balance": final,
+            "return_pct": final / START_BALANCE - 1,
+        })
+    return rows
+
+
+def write_summary(summary, path=BACKTEST_SUMMARY):
+    """Atomically replace the backtest evidence file read by the release gate."""
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(path.name + ".tmp")
+    with tmp.open("w", encoding="utf-8", newline="\n") as stream:
+        json.dump(summary, stream, allow_nan=False, sort_keys=True, indent=2)
+        stream.write("\n")
+        stream.flush()
+        os.fsync(stream.fileno())
+    tmp.replace(path)
+    return path
 
 
 def main():
@@ -208,38 +330,36 @@ def main():
             result = run_backtest()
     except (RuntimeError, ValueError, DataQualityError) as exc:
         raise SystemExit(f"Backtest stopped: {exc}") from exc
-    test, trades = result["test"], result["trades"]
-    print(f"Test period: {test['timestamp'].min()} -> {test['timestamp'].max()}")
-    print(f"Matured rows: {len(test)} across {test['token_address'].nunique()} tokens")
-    print(f"Sources: {result['quality']['sources']}")
+    summary = summarize(result)
+    summary["cost_sensitivity"] = cost_sensitivity(result)
+    write_summary(summary)
+    baseline_text = ("n/a" if summary["baseline_mean_net_return"] is None
+                     else f"{summary['baseline_mean_net_return']:.2%}")
+    print(f"Test period: {summary['test_start']} -> {summary['test_end']}")
+    print(f"Matured rows: {summary['matured_rows']} across {summary['tokens']} tokens")
+    print(f"Sources: {summary['sources']}")
     print(f"Round-trip costs: fee {FEE:.2%} + slippage {SLIPPAGE:.2%} each side")
-    print(f"Test-row baseline: mean net return {sum(result['baseline_returns']) / len(test):.2%}")
-    if not trades:
+    print(f"Test-row baseline: mean net return {baseline_text}")
+    if not summary["closed_trades"]:
         print("No positions met the saved model threshold and risk limits.")
-        return 0
-    tr = pd.DataFrame(trades).sort_values(["exit_time", "token"], kind="mergesort")
-    equity = pd.Series([START_BALANCE] + tr["balance"].tolist())
-    drawdown = equity / equity.cummax() - 1
-    print(f"Trades: {len(tr)} across {tr['token'].nunique()} tokens")
-    print(f"Win rate: {(tr['net_return'] > 0).mean():.1%}; mean {tr['net_return'].mean():.2%}; "
-          f"median {tr['net_return'].median():.2%}; worst {tr['net_return'].min():.2%}")
-    print(f"Final balance: {equity.iloc[-1]:,.2f} ({equity.iloc[-1] / START_BALANCE - 1:+.1%})")
-    print(f"Maximum realized drawdown: {drawdown.min():.1%}")
-    print("Exit reasons:", tr["exit_reason"].value_counts().to_dict())
+    else:
+        print(f"Trades: {summary['closed_trades']} across {summary['tokens_traded']} tokens")
+        print(f"Win rate: {summary['win_rate']:.1%}; mean {summary['mean_net_return']:.2%}; "
+              f"median {summary['median_net_return']:.2%}; worst {summary['worst_net_return']:.2%}")
+        print(f"Final balance: {summary['final_balance']:,.2f} ({summary['return_pct']:+.1%})")
+        print(f"Maximum realized drawdown: {summary['max_drawdown']:.1%}")
+        print("Exit reasons:", summary["exit_reasons"])
+        tr = pd.DataFrame(result["trades"]).sort_values(["exit_time", "token"], kind="mergesort")
+        by_token = tr.groupby("token")["net_return"].agg(["count", "mean"]).sort_values("mean")
+        print("Worst token averages:")
+        print(by_token.head(5).round(4).to_string())
+        if summary["closed_trades"] < 30:
+            print("Caution: fewer than 30 trades; estimates are highly uncertain.")
     print("Cost sensitivity (same signal/price path, position sizing rerun):")
-    for multiple in (0.5, 1.0, 1.5):
-        scenario = simulate_portfolio(result["selected"], result["market"],
-                                      horizon_minutes=float(result["bundle"]["horizon_minutes"]),
-                                      side_cost=SIDE_COST * multiple)
-        final = scenario[-1]["balance"] if scenario else START_BALANCE
-        label = "base" if multiple == 1.0 else f"{multiple:.1f}x costs"
-        print(f"  {label}: {len(scenario)} trades, final balance {final:,.2f} "
-              f"({final / START_BALANCE - 1:+.1%})")
-    by_token = tr.groupby("token")["net_return"].agg(["count", "mean"]).sort_values("mean")
-    print("Worst token averages:")
-    print(by_token.head(5).round(4).to_string())
-    if len(tr) < 30:
-        print("Caution: fewer than 30 trades; estimates are highly uncertain.")
+    for row in summary["cost_sensitivity"]:
+        print(f"  {row['label']}: {row['closed_trades']} trades, final balance "
+              f"{row['final_balance']:,.2f} ({row['return_pct']:+.1%})")
+    print(f"Wrote {BACKTEST_SUMMARY.relative_to(ROOT)}")
     return 0
 
 

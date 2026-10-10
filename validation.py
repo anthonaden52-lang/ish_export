@@ -69,6 +69,8 @@ def walk_forward_metrics(frame, features, n_splits=3, horizon_minutes=HORIZON_MI
             "test_start": start.isoformat(),
             "train_rows": int(len(train)),
             "test_rows": int(len(test)),
+            "test_positives": int((labels == 1).sum()),
+            "test_negatives": int((labels == 0).sum()),
             "train_positive_rate": prevalence,
             "test_positive_rate": float(labels.mean()),
             "auc": auc,

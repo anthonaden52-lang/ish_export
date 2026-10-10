@@ -31,9 +31,11 @@ ROOT = Path(__file__).resolve().parent
 load_dotenv(ROOT / ".env")
 
 from indicators import READY, add_indicators, window_history  # noqa: E402
+from labels import HORIZON_MINUTES, TARGET_RETURN, add_labels  # noqa: E402
 from data_quality import clean_market_frame  # noqa: E402
 from model_store import load_model as trusted_load, predict_probability  # noqa: E402
 from process_lock import ProcessLock  # noqa: E402
+from release_gate_report import report as release_gate_report  # noqa: E402
 
 DATA = ROOT / "data" / "market.csv"
 MODEL = ROOT / "models" / "model.joblib"
@@ -50,7 +52,8 @@ NUMERIC_COLUMNS = (
     "fdv", "volume_1h", "buys_1h", "sells_1h",
 )
 
-_cache = {"csv": (None, None), "model": (None, None), "sig": (None, None), "quality": None}
+_cache = {"csv": (None, None), "model": (None, None), "sig": (None, None),
+          "labelable": (None, None), "quality": None}
 _data_error = None
 _model_error = None
 _job_lock = threading.Lock()
@@ -113,6 +116,14 @@ def finite_number(value):
     except (TypeError, ValueError, OverflowError):
         return None
     return number if math.isfinite(number) else None
+
+
+def count_labelable_rows(df, horizon_minutes=HORIZON_MINUTES, target_return=TARGET_RETURN):
+    """Count exactly the feature-ready, observed outcomes accepted by train.py."""
+    labeled = add_labels(add_indicators(df), horizon_minutes, target_return)
+    usable = labeled.loc[labeled["price_usd"] > 0].dropna(
+        subset=READY + ["future_return", "target"])
+    return int(len(usable))
 
 
 def build_signals(df, bundle):
@@ -210,16 +221,24 @@ def build_state():
         except (OSError, ValueError, TypeError):
             state["collector"] = {"status": "invalid health record", "running": False}
 
-    horizon = bundle["horizon_minutes"] if bundle else 15
+    horizon = bundle["horizon_minutes"] if bundle else HORIZON_MINUTES
+    target_return = bundle["target_return"] if bundle else TARGET_RETURN
     if df is not None and not df.empty:
         last, first = df["timestamp"].max(), df["timestamp"].min()
         age = (now - last.to_pydatetime()).total_seconds()
-        labelable = int((df["timestamp"] <= last - pd.Timedelta(minutes=horizon)).sum())
+        labelable_error = None
+        try:
+            label_key = (DATA.stat().st_mtime, float(horizon), float(target_return))
+            if _cache["labelable"][0] != label_key:
+                _cache["labelable"] = (label_key, count_labelable_rows(df, horizon, target_return))
+            labelable = _cache["labelable"][1]
+        except (OSError, KeyError, TypeError, ValueError) as exc:
+            labelable, labelable_error = 0, str(exc)[:200]
         state["data"] = {
             "rows": int(len(df)), "tokens": int(df["token_address"].nunique()),
             "first": iso(first), "last": iso(last), "age_s": int(age),
             "running": 0 <= age < STALE_AFTER_S, "labelable": labelable, "need": 500,
-            "size_kb": round(DATA.stat().st_size / 1024),
+            "size_kb": round(DATA.stat().st_size / 1024), "labelable_error": labelable_error,
         }
         try:
             state["signals"] = build_signals(df, bundle)
@@ -246,8 +265,12 @@ def build_state():
             "feature_version": bundle.get("feature_version", "legacy"),
             "feature_drift": [{"feature": item["feature"], "psi": item["psi"],
                                "test_missing_rate": item.get("test_missing_rate")}
-                              for item in drift[:3]],
-        }
+                                  for item in drift[:3]],
+            }
+    try:
+        state["release_gate"] = release_gate_report()
+    except Exception as exc:  # the page must survive an unreadable evidence file
+        state["release_gate_error"] = f"{type(exc).__name__}: {exc}"[:200]
     return state
 
 
@@ -395,6 +418,8 @@ button{font:inherit;font-size:12px;font-weight:650;letter-spacing:.015em;border:
 
 <div class="card"><h2>Model</h2><div id="model" class="mut">Loading…</div></div>
 
+<div class="card"><h2>Acorn 2.0 release gate</h2><div id="gate" class="mut">Loading…</div></div>
+
 <div class="card"><h2>Signals <span class="mut" id="sigmeta"></span></h2>
  <div class="scroll"><table><thead><tr><th>Token</th><th>Win prob</th><th>Trend</th><th>Price</th><th>Last 5 scans</th><th>RSI</th><th>Liquidity</th></tr></thead><tbody id="sigs"></tbody></table></div>
  <div class="mut" id="signote" style="margin-top:8px"></div>
@@ -442,6 +467,18 @@ function render(s){
  const m=s.model,me=$('model');me.replaceChildren();
  if(m){[['Trained',when(m.trained)],['Predicts',(m.target*100).toFixed(0)+'%+ gain within '+m.horizon+' min'],['Signal threshold',(m.threshold*100).toFixed(0)+'% probability'],['Calibration',m.calibration||'uncalibrated'],['Feature version',m.feature_version||'legacy'],['Test period starts',when(m.test_start)]].forEach(([l,v])=>me.append(H('div',{},H('span',{class:'mut'},l+': '),v)));if(m.feature_drift&&m.feature_drift.length)me.append(H('div',{class:'mut'},'Largest test-period feature PSI: '+m.feature_drift.map(x=>x.feature+' '+Number(x.psi).toFixed(2)).join(', ')))}
  else me.textContent=s.model_error||'No trained model yet. Collect data, then press “Train model”.';
+ const g=s.release_gate,ge=$('gate');ge.replaceChildren();
+ if(g){const sum=g.summary,id=g.identity||{},mt=g.metrics||{};
+  document.title=g.release_name+' — Acorn dashboard';
+  ge.append(H('div',{},H('span',{class:sum.failed?'bad':'good'},sum.passed+' of '+sum.total+' requirements pass'),' · release label: ',H('strong',{},g.release_name)));
+  if(sum.failing.length)ge.append(H('div',{class:'warn'},'Blocking: '+sum.failing.join(', ')));
+  ge.append(H('div',{class:'mut'},'model '+(id.model_sha256?id.model_sha256.slice(0,12)+'…':'none')+' · data '+(id.training_data_sha256?id.training_data_sha256.slice(0,12)+'…':'none')+' · usable rows '+(mt.usable_rows==null?'–':mt.usable_rows)+' · span '+(mt.dataset_span_days==null?'–':Number(mt.dataset_span_days).toFixed(2)+' d')));
+  const list=H('div',{style:'margin-top:9px'});
+  for(const c of g.checks)list.append(H('div',{style:'padding:7px 0;border-bottom:1px solid #1a293c'},
+   H('div',{},H('span',{class:c.passed?'good':'bad'},c.passed?'PASS':'FAIL'),'  ',H('span',{class:'mut'},c.area)),
+   H('div',{},c.requirement),H('div',{class:'mut'},c.detail)));
+  ge.append(list);
+ }else ge.textContent=s.release_gate_error||'No release-gate evidence yet. Run train.py and backtest.py.';
  const tb=$('sigs');tb.replaceChildren();const thr=m?m.threshold:null;let hits=0;
  for(const r of s.signals){const hit=r.prob!=null&&thr!=null&&r.prob>=thr;if(hit)hits++;
   const tr=H('tr',hit?{class:'hit'}:{});
